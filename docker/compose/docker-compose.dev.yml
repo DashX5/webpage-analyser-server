@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  app:
+    environment:
+      - GIN_MODE=debug
+    volumes:
+      - ../../cmd:/app/cmd:ro
+      - ../../internal:/app/internal:ro
+      - ../../web:/app/web:ro
+    
+  redis:
+    ports:
+      - "6379:6379"  # Expose Redis port for local development
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis 
