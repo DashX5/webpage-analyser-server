@@ -1,0 +1,51 @@
+server:
+  port: 8080
+  timeout: 30s
+  mode: debug # debug or release
+
+analyzer:
+  max_links: 1000 # Maximum number of links to analyze per page
+  link_timeout: 5s # Timeout for checking each link
+  max_workers: 20 # Number of concurrent workers for link checking
+  max_redirects: 0 # Don't follow redirects
+
+cache:
+  enabled: true
+  ttl: 1h # Cache results for 1 hour
+  redis:
+    host: redis
+    # host: localhost
+    port: 6379
+    db: 0
+    password: "" # Set password if required
+
+rate_limit:
+  enabled: true
+  requests_per_minute: 60 # 1 request per second per IP
+
+cors:
+  allowed_origins:
+    - "*"
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "OPTIONS"
+  allowed_headers:
+    - "Origin"
+    - "Content-Type"
+    - "Accept"
+
+logging:
+  level: info # debug, info, warn, error
+  format: console # console or json
+
+metrics:
+  enabled: true
+  prometheus:
+    buckets:
+      - 0.1
+      - 0.5
+      - 1
+      - 2
+      - 5
+      - 10 

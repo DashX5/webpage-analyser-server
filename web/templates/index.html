@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webpage Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center mb-8">Webpage Analyzer</h1>
+        
+        <div class="max-w-2xl mx-auto">
+            <!-- Analysis Form -->
+            <form id="analyzeForm" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="url">
+                        URL to Analyze
+                    </label>
+                    <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                           id="url" type="url" placeholder="https://example.com" required>
+                </div>
+                <div class="flex items-center justify-between">
+                    <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                            type="submit">
+                        Analyze
+                    </button>
+                </div>
+            </form>
+
+            <!-- Loading Indicator -->
+            <div id="loading" class="hidden text-center py-4">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                <p class="mt-2 text-gray-600">Analyzing webpage...</p>
+            </div>
+
+            <!-- Error Message -->
+            <div id="error" class="hidden px-4 py-3 rounded relative mb-4" role="alert">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <svg id="errorIcon" class="h-5 w-5 mt-0.5" fill="currentColor" viewBox="0 0 20 20"></svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 id="errorTitle" class="text-sm font-semibold"></h3>
+                        <p id="errorMessage" class="text-sm mt-1"></p>
+                        <div id="errorDetails" class="hidden mt-2">
+                            <button id="toggleDetails" class="text-xs underline hover:no-underline">
+                                Show technical details
+                            </button>
+                            <div id="technicalDetails" class="hidden mt-2 p-2 bg-black bg-opacity-5 rounded text-xs font-mono"></div>
+                        </div>
+                        <button id="retryButton" class="hidden mt-2 text-xs font-medium underline hover:no-underline">
+                            Try again
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div id="results" class="hidden bg-white shadow-md rounded px-8 pt-6 pb-8">
+                <h2 class="text-xl font-bold mb-4">Analysis Results</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <h3 class="font-bold text-gray-700">HTML Version</h3>
+                        <p id="htmlVersion" class="text-gray-600"></p>
+                    </div>
+
+                    <div>
+                        <h3 class="font-bold text-gray-700">Page Title</h3>
+                        <p id="pageTitle" class="text-gray-600"></p>
+                    </div>
+
+                    <div>
+                        <h3 class="font-bold text-gray-700">Headings</h3>
+                        <div id="headings" class="text-gray-600"></div>
+                    </div>
+
+                    <div>
+                        <h3 class="font-bold text-gray-700">Links</h3>
+                        <div id="links" class="text-gray-600"></div>
+                    </div>
+
+                    <div>
+                        <h3 class="font-bold text-gray-700">Login Form</h3>
+                        <p id="loginForm" class="text-gray-600"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Application Constants
+        const CONFIG = {
+            API_ENDPOINT: '/api/v1/analyze',
+            CLASSES: {
+                HIDDEN: 'hidden',
+                CLIENT_ERROR: 'bg-amber-50 border border-amber-200 text-amber-800',
+                SERVER_ERROR: 'bg-red-50 border border-red-200 text-red-800',
+                NETWORK_ERROR: 'bg-gray-50 border border-gray-200 text-gray-800',
+                ICON_CLIENT: 'text-amber-500',
+                ICON_SERVER: 'text-red-500',
+                ICON_NETWORK: 'text-gray-500'
+            },
+            ICONS: {
+                WARNING: '<path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>',
+                ERROR: '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>',
+                NETWORK: '<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>'
+            },
+            MESSAGES: {
+                400: "The URL you entered appears to be invalid. Please check and try again.",
+                401: "Access to this webpage is restricted. Authentication may be required.",
+                403: "Access to this webpage is forbidden.",
+                404: "The webpage could not be found. Please check the URL and try again.",
+                408: "The request timed out. The webpage may be slow to respond.",
+                429: "Too many requests. Please wait a moment before trying again.",
+                500: "The server encountered an error while analyzing the webpage.",
+                502: "The webpage's server is not responding properly.",
+                503: "The webpage's server is temporarily unavailable.",
+                504: "The webpage took too long to respond.",
+                NETWORK: "Unable to connect to the server. Please check your internet connection and try again.",
+                DEFAULT: "An unexpected error occurred."
+            }
+        };
+
+        // DOM Element Manager
+        const DOM = {
+            elements: {},
+            
+            init() {
+                this.elements = {
+                    form: document.getElementById('analyzeForm'),
+                    url: document.getElementById('url'),
+                    loading: document.getElementById('loading'),
+                    error: document.getElementById('error'),
+                    errorIcon: document.getElementById('errorIcon'),
+                    errorTitle: document.getElementById('errorTitle'),
+                    errorMessage: document.getElementById('errorMessage'),
+                    errorDetails: document.getElementById('errorDetails'),
+                    technicalDetails: document.getElementById('technicalDetails'),
+                    toggleDetails: document.getElementById('toggleDetails'),
+                    retryButton: document.getElementById('retryButton'),
+                    results: document.getElementById('results'),
+                    htmlVersion: document.getElementById('htmlVersion'),
+                    pageTitle: document.getElementById('pageTitle'),
+                    headings: document.getElementById('headings'),
+                    links: document.getElementById('links'),
+                    loginForm: document.getElementById('loginForm')
+                };
+            },
+
+            show(elementName) {
+                this.elements[elementName]?.classList.remove(CONFIG.CLASSES.HIDDEN);
+            },
+
+            hide(elementName) {
+                this.elements[elementName]?.classList.add(CONFIG.CLASSES.HIDDEN);
+            },
+
+            setText(elementName, text) {
+                if (this.elements[elementName]) {
+                    this.elements[elementName].textContent = text;
+                }
+            },
+
+            setHTML(elementName, html) {
+                if (this.elements[elementName]) {
+                    this.elements[elementName].innerHTML = html;
+                }
+            }
+        };
+
+        // Error Type Definitions
+        const ERROR_TYPES = {
+            client: {
+                class: CONFIG.CLASSES.CLIENT_ERROR,
+                iconClass: CONFIG.CLASSES.ICON_CLIENT,
+                icon: CONFIG.ICONS.WARNING,
+                title: 'Request Error'
+            },
+            server: {
+                class: CONFIG.CLASSES.SERVER_ERROR,
+                iconClass: CONFIG.CLASSES.ICON_SERVER,
+                icon: CONFIG.ICONS.ERROR,
+                title: 'Server Error'
+            },
+            network: {
+                class: CONFIG.CLASSES.NETWORK_ERROR,
+                iconClass: CONFIG.CLASSES.ICON_NETWORK,
+                icon: CONFIG.ICONS.NETWORK,
+                title: 'Connection Error'
+            }
+        };
+
+        // Utility Functions
+        const Utils = {
+            extractStatusCode(errorData) {
+                if (!errorData) return null;
+                
+                // Try different possible status code fields
+                let statusCode = errorData.code || errorData.status || errorData.statusCode;
+                
+                // Extract from details if not found in main fields
+                if (!statusCode && errorData.details) {
+                    const match = errorData.details.match(/status code (\d+)/);
+                    statusCode = match ? parseInt(match[1]) : null;
+                }
+                
+                return statusCode;
+            },
+
+            getErrorType(statusCode) {
+                if (statusCode >= 400 && statusCode < 500) return ERROR_TYPES.client;
+                if (statusCode >= 500) return ERROR_TYPES.server;
+                return ERROR_TYPES.network;
+            },
+
+            getUserMessage(statusCode) {
+                return CONFIG.MESSAGES[statusCode] || CONFIG.MESSAGES.DEFAULT;
+            },
+
+            shouldShowRetry(statusCode, isNetworkError) {
+                return isNetworkError || statusCode >= 500 || statusCode === 408 || statusCode === 429;
+            }
+        };
+
+        // Error Handler
+        const ErrorHandler = {
+            show(errorData, isNetworkError = false) {
+                const statusCode = Utils.extractStatusCode(errorData);
+                const errorType = isNetworkError ? ERROR_TYPES.network : Utils.getErrorType(statusCode);
+                
+                console.log('Error data:', errorData, 'Status code:', statusCode, 'Is network error:', isNetworkError);
+                
+                this._setErrorStyling(errorType);
+                this._setErrorContent(statusCode, errorData, isNetworkError);
+                this._handleTechnicalDetails(errorData, isNetworkError);
+                this._handleRetryButton(statusCode, isNetworkError);
+                
+                DOM.show('error');
+            },
+
+            _setErrorStyling(errorType) {
+                DOM.elements.error.className = `${errorType.class} px-4 py-3 rounded relative mb-4`;
+                DOM.elements.errorIcon.className = `h-5 w-5 mt-0.5 ${errorType.iconClass}`;
+                DOM.setHTML('errorIcon', errorType.icon);
+                DOM.setText('errorTitle', errorType.title);
+            },
+
+            _setErrorContent(statusCode, errorData, isNetworkError) {
+                const message = isNetworkError 
+                    ? CONFIG.MESSAGES.NETWORK 
+                    : Utils.getUserMessage(statusCode);
+                DOM.setText('errorMessage', message);
+            },
+
+            _handleTechnicalDetails(errorData, isNetworkError) {
+                const hasDetails = errorData?.details || isNetworkError;
+                
+                if (hasDetails) {
+                    const details = errorData?.details || "Network connection failed";
+                    DOM.setText('technicalDetails', details);
+                    DOM.show('errorDetails');
+                } else {
+                    DOM.hide('errorDetails');
+                }
+            },
+
+            _handleRetryButton(statusCode, isNetworkError) {
+                if (Utils.shouldShowRetry(statusCode, isNetworkError)) {
+                    DOM.show('retryButton');
+                } else {
+                    DOM.hide('retryButton');
+                }
+            }
+        };
+
+        // Results Handler
+        const ResultsHandler = {
+            display(data) {
+                DOM.setText('htmlVersion', data.html_version);
+                DOM.setText('pageTitle', data.title);
+                DOM.setText('loginForm', data.has_login_form ? 'Yes' : 'No');
+                
+                this._displayHeadings(data.headings);
+                this._displayLinks(data.links);
+                
+                DOM.show('results');
+            },
+
+            _displayHeadings(headings) {
+                const headingsHtml = Object.entries(headings)
+                    .map(([tag, count]) => `<div>${tag}: ${count}</div>`)
+                    .join('');
+                DOM.setHTML('headings', headingsHtml);
+            },
+
+            _displayLinks(links) {
+                const linksHtml = `
+                    <div>Internal: ${links.internal}</div>
+                    <div>External: ${links.external}</div>
+                    <div>Inaccessible: ${links.inaccessible}</div>
+                `;
+                DOM.setHTML('links', linksHtml);
+            }
+        };
+
+        // Main Application
+        const App = {
+            async init() {
+                DOM.init();
+                this._bindEvents();
+            },
+
+            _bindEvents() {
+                DOM.elements.form.addEventListener('submit', this._handleSubmit.bind(this));
+                DOM.elements.toggleDetails.addEventListener('click', this._toggleTechnicalDetails);
+                DOM.elements.retryButton.addEventListener('click', this._handleRetry.bind(this));
+            },
+
+            _toggleTechnicalDetails() {
+                const isHidden = DOM.elements.technicalDetails.classList.contains(CONFIG.CLASSES.HIDDEN);
+                
+                if (isHidden) {
+                    DOM.show('technicalDetails');
+                    DOM.setText('toggleDetails', 'Hide technical details');
+                } else {
+                    DOM.hide('technicalDetails');
+                    DOM.setText('toggleDetails', 'Show technical details');
+                }
+            },
+
+            _handleRetry() {
+                DOM.elements.form.dispatchEvent(new Event('submit'));
+            },
+
+            async _handleSubmit(e) {
+                e.preventDefault();
+                
+                const url = DOM.elements.url.value;
+                this._resetUI();
+                DOM.show('loading');
+                
+                try {
+                    const response = await fetch(CONFIG.API_ENDPOINT, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                        ErrorHandler.show(data);
+                        return;
+                    }
+                    
+                    ResultsHandler.display(data);
+                } catch (err) {
+                    ErrorHandler.show({ message: err.message }, true);
+                } finally {
+                    DOM.hide('loading');
+                }
+            },
+
+            _resetUI() {
+                DOM.hide('error');
+                DOM.hide('results');
+            }
+        };
+
+        // Initialize application when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => App.init());
+    </script>
+</body>
+</html> 
